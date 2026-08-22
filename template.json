@@ -21,14 +21,22 @@
   },
   "topology": {
     "$note": "Four services. Web receives users, OAuth callbacks, and Meta webhooks. Worker consumes BullMQ jobs and polls for missed comments. Both share Postgres, Redis, and the exact same encryption key. No application service needs filesystem persistence.",
-    "publicServices": ["web"],
-    "privateServices": ["worker", "postgres", "redis"]
+    "publicServices": [
+      "web"
+    ],
+    "privateServices": [
+      "worker",
+      "postgres",
+      "redis"
+    ]
   },
   "services": [
     {
       "name": "postgres",
       "image": "ghcr.io/railwayapp-templates/postgres-ssl:16",
-      "volume": {"mount": "/var/lib/postgresql/data"},
+      "volume": {
+        "mount": "/var/lib/postgresql/data"
+      },
       "variables": {
         "PGDATA": "/var/lib/postgresql/data/pgdata",
         "POSTGRES_DB": "openreply",
@@ -41,7 +49,9 @@
     {
       "name": "redis",
       "image": "redis:8.2",
-      "volume": {"mount": "/data"},
+      "volume": {
+        "mount": "/data"
+      },
       "startCommand": "/bin/sh -c \"rm -rf $RAILWAY_VOLUME_MOUNT_PATH/lost+found/ && exec docker-entrypoint.sh redis-server --requirepass $REDIS_PASSWORD --save 60 1 --dir $RAILWAY_VOLUME_MOUNT_PATH\"",
       "variables": {
         "REDIS_PASSWORD": "${{ secret(32, alphabet) }}",
@@ -55,9 +65,9 @@
       "startCommand": "/usr/local/bin/boot.sh web",
       "port": 3000,
       "publicDomain": true,
-      "healthcheckPath": "/api/health",
+      "healthcheckPath": "/login",
       "restartPolicy": "ON_FAILURE",
-      "$note_health": "The upstream health endpoint checks Postgres, Redis, BullMQ, and the worker heartbeat. A 200 therefore proves the whole four-service topology is alive, not only the Next.js listener.",
+      "$note_health": "Railway probes /login so the web deployment does not fail while the worker image is still starting during the platform's fixed 300-second first-deploy window. Post-deploy verification separately requires /api/health to report Postgres, Redis, BullMQ, and the worker heartbeat as healthy.",
       "$note_network": "The web server binds :: and Railway's domain explicitly targets port 3000. This serves Railway's IPv6 private path and IPv4 health checker from one Node listener.",
       "variables": {
         "PORT": "3000",
@@ -110,5 +120,14 @@
     "writeRead": "Create and read workspace data through the authenticated dashboard",
     "meta": "Connect a tester Instagram account, create keyword TEST, comment from another account, and confirm a SENT DM log",
     "$note": "The Meta leg requires a real Meta app, Advanced Access or accepted tester roles, and two Instagram accounts. Report it as unproven unless those prerequisites are available."
+  },
+  "railway": {
+    "workspace": "Auromations",
+    "sourceProjectId": "e4b8d217-bab4-4d1f-9f9a-4bf0fe2e2cd4",
+    "templateId": "0b71e432-b645-4b67-997a-b9fa7d50ec33",
+    "deployUrl": "https://railway.com/deploy/openreply",
+    "published": true,
+    "marketplaceApproved": false,
+    "$note": "The deploy URL is live. marketplaceApproved false means Railway review is pending, not that deployment is blocked."
   }
 }

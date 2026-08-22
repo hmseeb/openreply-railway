@@ -99,7 +99,7 @@ DEPLOY = {
     },
     "web": {
         "startCommand": "/usr/local/bin/boot.sh web",
-        "healthcheckPath": "/api/health",
+        "healthcheckPath": "/login",
         "restartPolicyType": "ON_FAILURE",
         "restartPolicyMaxRetries": 10,
     },

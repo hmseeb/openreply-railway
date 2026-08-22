@@ -4,6 +4,8 @@ OpenReply turns an explicit Instagram comment keyword into a private reply throu
 
 Upstream: [diwenne/openreply](https://github.com/diwenne/openreply), MIT licensed.
 
+Deploy: https://railway.com/deploy/openreply
+
 ## What gets deployed
 
 | Service | Purpose |

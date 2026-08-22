@@ -153,7 +153,7 @@ def main():
             "EMAIL_FROM": "OpenReply <login@example.com>",
         },
         start="/usr/local/bin/boot.sh web",
-        health="/api/health",
+        health="/login",
     )
     domain = gql(
         """mutation($input: ServiceDomainCreateInput!) {
