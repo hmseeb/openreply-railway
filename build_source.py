@@ -9,7 +9,7 @@ import sys
 
 SKILL = pathlib.Path("/Users/haseeb/.pi/agent/skills/create-template-for-railway/scripts")
 sys.path.insert(0, str(SKILL))
-import rw  # noqa: E402
+import rw  # pyright: ignore[reportMissingImports]
 
 WORKSPACE = "fc4796db-2c6c-4354-a564-d4a1d900af53"
 APP_IMAGE = "ghcr.io/hmseeb/openreply-railway:1.0.0"

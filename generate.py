@@ -7,7 +7,7 @@ import sys
 
 SKILL = pathlib.Path("/Users/haseeb/.pi/agent/skills/create-template-for-railway/scripts")
 sys.path.insert(0, str(SKILL))
-import rw  # noqa: E402
+import rw  # pyright: ignore[reportMissingImports]
 
 ROOT = pathlib.Path(__file__).parent
 state = json.loads((ROOT / ".state" / "source.json").read_text())
