@@ -1,0 +1,114 @@
+{
+  "$schema": "internal build sheet, not a Railway file",
+  "name": "OpenReply",
+  "description": "Instagram comment-to-DM automation with Postgres, Redis, and a worker",
+  "upstream": {
+    "repo": "https://github.com/diwenne/openreply",
+    "commit": "80fa38780e2973a0299c05019bc0d0657044220c",
+    "version": "0.1.0 at 80fa387",
+    "licence": "MIT",
+    "$note": "Upstream has no release or tag. The exact main-branch commit is pinned so every deploy receives the same source."
+  },
+  "policy": {
+    "verdict": "REVIEW approved with mitigation",
+    "mitigation": "Create only explicit keyword campaigns whose post CTA tells commenters that the keyword triggers a DM. Never use Match any word for unsolicited replies.",
+    "$note": "OpenReply uses Meta's official API, deduplicates by comment, and enforces Meta's 750 private replies per hour cap. The template cannot technically disable Match any word, so the listing and deployer guide state this operating rule."
+  },
+  "image": {
+    "ref": "ghcr.io/hmseeb/openreply-railway:1.0.0",
+    "source": "https://github.com/hmseeb/openreply-railway",
+    "$note": "Upstream publishes no application image. This multi-role image builds pinned source with Node 22. The boot script applies Prisma migrations with bounded retries, then starts either the IPv6-bound web process or the long-running worker."
+  },
+  "topology": {
+    "$note": "Four services. Web receives users, OAuth callbacks, and Meta webhooks. Worker consumes BullMQ jobs and polls for missed comments. Both share Postgres, Redis, and the exact same encryption key. No application service needs filesystem persistence.",
+    "publicServices": ["web"],
+    "privateServices": ["worker", "postgres", "redis"]
+  },
+  "services": [
+    {
+      "name": "postgres",
+      "image": "ghcr.io/railwayapp-templates/postgres-ssl:16",
+      "volume": {"mount": "/var/lib/postgresql/data"},
+      "variables": {
+        "PGDATA": "/var/lib/postgresql/data/pgdata",
+        "POSTGRES_DB": "openreply",
+        "POSTGRES_USER": "postgres",
+        "POSTGRES_PASSWORD": "${{ secret(32, alphabet) }}",
+        "DATABASE_URL": "postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:5432/${{PGDATABASE}}"
+      },
+      "$note": "Version 16 matches upstream Compose. PGDATA uses a subdirectory because Railway volume roots contain lost+found and initdb refuses a non-empty root."
+    },
+    {
+      "name": "redis",
+      "image": "redis:8.2",
+      "volume": {"mount": "/data"},
+      "startCommand": "/bin/sh -c \"rm -rf $RAILWAY_VOLUME_MOUNT_PATH/lost+found/ && exec docker-entrypoint.sh redis-server --requirepass $REDIS_PASSWORD --save 60 1 --dir $RAILWAY_VOLUME_MOUNT_PATH\"",
+      "variables": {
+        "REDIS_PASSWORD": "${{ secret(32, alphabet) }}",
+        "REDIS_URL": "redis://${{REDISUSER}}:${{REDIS_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:6379"
+      },
+      "$note": "BullMQ jobs, rate limits, delayed retries, and worker health live in Redis, so it receives a persistent volume and password."
+    },
+    {
+      "name": "web",
+      "image": "ghcr.io/hmseeb/openreply-railway:1.0.0",
+      "startCommand": "/usr/local/bin/boot.sh web",
+      "port": 3000,
+      "publicDomain": true,
+      "healthcheckPath": "/api/health",
+      "restartPolicy": "ON_FAILURE",
+      "$note_health": "The upstream health endpoint checks Postgres, Redis, BullMQ, and the worker heartbeat. A 200 therefore proves the whole four-service topology is alive, not only the Next.js listener.",
+      "$note_network": "The web server binds :: and Railway's domain explicitly targets port 3000. This serves Railway's IPv6 private path and IPv4 health checker from one Node listener.",
+      "variables": {
+        "PORT": "3000",
+        "NEXTAUTH_URL": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+        "NEXTAUTH_SECRET": "${{secret(32)}}",
+        "CRON_SECRET": "${{secret(32)}}",
+        "ENCRYPTION_KEY": "${{ secret(64, hex) }}",
+        "DATABASE_URL": "${{postgres.DATABASE_URL}}",
+        "REDIS_URL": "${{redis.REDIS_URL}}",
+        "RESEND_API_KEY": "<required prompt>",
+        "EMAIL_FROM": "<required prompt>",
+        "META_GRAPH_API_VERSION": "v25.0",
+        "INSTAGRAM_APP_ID": "<required prompt>",
+        "INSTAGRAM_APP_SECRET": "<required prompt>",
+        "FACEBOOK_APP_SECRET": "<required prompt>",
+        "WEBHOOK_VERIFY_TOKEN": "${{secret(32)}}"
+      }
+    },
+    {
+      "name": "worker",
+      "image": "ghcr.io/hmseeb/openreply-railway:1.0.0",
+      "startCommand": "/usr/local/bin/boot.sh worker",
+      "publicDomain": false,
+      "restartPolicy": "ON_FAILURE",
+      "$note": "The worker must remain always on. It consumes the DM queue, refreshes its health heartbeat every 30 seconds, and polls every five minutes for comments Meta webhooks missed.",
+      "variables": {
+        "NEXTAUTH_URL": "https://${{web.RAILWAY_PUBLIC_DOMAIN}}",
+        "NEXTAUTH_SECRET": "${{web.NEXTAUTH_SECRET}}",
+        "ENCRYPTION_KEY": "${{web.ENCRYPTION_KEY}}",
+        "DATABASE_URL": "${{postgres.DATABASE_URL}}",
+        "REDIS_URL": "${{redis.REDIS_URL}}",
+        "META_GRAPH_API_VERSION": "${{web.META_GRAPH_API_VERSION}}",
+        "INSTAGRAM_APP_ID": "${{web.INSTAGRAM_APP_ID}}",
+        "INSTAGRAM_APP_SECRET": "${{web.INSTAGRAM_APP_SECRET}}",
+        "FACEBOOK_APP_SECRET": "${{web.FACEBOOK_APP_SECRET}}",
+        "WEBHOOK_VERIFY_TOKEN": "${{web.WEBHOOK_VERIFY_TOKEN}}",
+        "COMMENT_POLL_INTERVAL_MS": "300000",
+        "COMMENT_POLL_MAX_PER_SWEEP": "30",
+        "COMMENT_POLL_LOOKBACK_HOURS": "72"
+      }
+    }
+  ],
+  "firstBoot": {
+    "$note": "Both application roles run prisma migrate deploy with up to 120 seconds of retries. The web healthcheck stays at 503 until the worker writes its first Redis heartbeat, then becomes 200.",
+    "expectedSeconds": 90
+  },
+  "verification": {
+    "health": "GET /api/health returns 200, status ok, and worker.healthy true",
+    "auth": "Request a magic link, open it, and confirm a user and workspace are created",
+    "writeRead": "Create and read workspace data through the authenticated dashboard",
+    "meta": "Connect a tester Instagram account, create keyword TEST, comment from another account, and confirm a SENT DM log",
+    "$note": "The Meta leg requires a real Meta app, Advanced Access or accepted tester roles, and two Instagram accounts. Report it as unproven unless those prerequisites are available."
+  }
+}
