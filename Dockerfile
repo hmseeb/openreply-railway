@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim AS build
 
-ARG OPENREPLY_COMMIT=80fa38780e2973a0299c05019bc0d0657044220c
+ARG OPENREPLY_COMMIT=c78b2d2f68c9764ef7a7dde51dfa5bfa99304a09
 LABEL org.opencontainers.image.source="https://github.com/hmseeb/openreply-railway"
 LABEL org.opencontainers.image.revision="${OPENREPLY_COMMIT}"
 
@@ -29,7 +29,7 @@ RUN npm run build
 FROM node:22-bookworm-slim AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && apt-get install -y --no-install-recommends ca-certificates openssl wget \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

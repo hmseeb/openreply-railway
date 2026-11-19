@@ -4,7 +4,7 @@ OpenReply is an open source Instagram comment-to-DM tool. A person comments a ke
 
 ## About Hosting OpenReply
 
-This template deploys the Next.js web app, a long-running BullMQ worker, Postgres, and Redis. The web service receives users, OAuth callbacks, and Meta webhooks. The worker survives retries and rate-limit windows, and polls every five minutes for comments that webhooks missed.
+This template deploys the Next.js web app, a long-running BullMQ worker, a small cron scheduler, Postgres, and Redis. The web service receives users, OAuth callbacks, and Meta webhooks. The worker survives retries and rate-limit windows, and polls every five minutes for comments that webhooks missed. The cron service calls the web app over the private network to refresh Instagram tokens daily, so connected accounts keep working past the 60-day token lifetime.
 
 Only the web service is public. Railway generates the database and Redis credentials, a session secret, the Instagram-token encryption key, the cron secret, and the webhook verification token. The `/api/health` endpoint returns 200 only when Postgres, Redis, the queue, and the worker heartbeat are all healthy.
 
@@ -26,9 +26,9 @@ OpenReply sends messages to third parties, so use it only for explicit opt-in ca
 
 ### Deployment Dependencies
 
-- Source: [diwenne/openreply](https://github.com/diwenne/openreply), MIT licensed, pinned to commit `80fa38780e2973a0299c05019bc0d0657044220c`.
-- Image: [hmseeb/openreply-railway](https://github.com/hmseeb/openreply-railway), tag `1.0.0`.
-- [Meta app setup guide](https://github.com/diwenne/openreply/blob/80fa38780e2973a0299c05019bc0d0657044220c/docs/setup.md)
+- Source: [diwenne/openreply](https://github.com/diwenne/openreply), MIT licensed, pinned to commit `c78b2d2f68c9764ef7a7dde51dfa5bfa99304a09`.
+- Image: [hmseeb/openreply-railway](https://github.com/hmseeb/openreply-railway), tag `1.1.0`.
+- [Meta app setup guide](https://github.com/diwenne/openreply/blob/c78b2d2f68c9764ef7a7dde51dfa5bfa99304a09/docs/setup.md)
 - [Resend](https://resend.com)
 
 ### Implementation Details
@@ -38,10 +38,12 @@ OpenReply sends messages to third parties, so use it only for explicit opt-in ca
 | Variable | Where to get it |
 | --- | --- |
 | `RESEND_API_KEY` | Resend API keys |
-| `EMAIL_FROM` | A sender on a domain verified in Resend, such as `OpenReply <login@example.com>` |
+| `EMAIL_FROM` | A sender on a domain verified in Resend, such as `login@example.com`, optionally with a display name before it in angle brackets |
 | `INSTAGRAM_APP_ID` | Meta, Instagram product, API setup with Instagram login |
 | `INSTAGRAM_APP_SECRET` | The same Instagram product page |
 | `FACEBOOK_APP_SECRET` | Meta App Settings, Basic |
+
+Optional: set `ALLOWED_EMAILS` to a comma-separated list to restrict who can sign in. Without it, anyone who reaches the URL can create a workspace.
 
 The Facebook app ID is not the Instagram product app ID. OpenReply needs the Instagram product ID plus both secrets.
 
@@ -52,8 +54,8 @@ The web and worker both run Prisma migrations with bounded retries while Postgre
 **Meta configuration after deployment**
 
 1. Copy the `web` public domain.
-2. Register `https://<web-domain>/api/instagram/callback` as the Instagram OAuth redirect.
-3. Register `https://<web-domain>/api/webhook` as the webhook callback.
+2. Register `https://YOUR-WEB-DOMAIN/api/instagram/callback` as the Instagram OAuth redirect.
+3. Register `https://YOUR-WEB-DOMAIN/api/webhook` as the webhook callback.
 4. Copy `WEBHOOK_VERIFY_TOKEN` from the `web` service into Meta's verify-token field.
 5. Subscribe to `comments`.
 6. Add your professional Instagram account as a tester and accept the invite inside Instagram.
@@ -82,6 +84,6 @@ Start with one worker. More workers increase concurrency and pressure against Me
 
 ## Why Deploy OpenReply on Railway?
 
-OpenReply is not only a web page. A webhook receiver, queue consumer, polling reconciler, Postgres, and Redis must stay online and share exact secrets. Railway runs all four pieces on one private network, keeps both datastores persistent, and restarts the worker when it fails.
+OpenReply is not only a web page. A webhook receiver, queue consumer, polling reconciler, cron scheduler, Postgres, and Redis must stay online and share exact secrets. Railway runs every piece on one private network, keeps both datastores persistent, and restarts the worker when it fails.
 
 The template also removes the fragile setup steps from the runtime: Prisma migrations run after the services can reach Postgres, the web listener supports Railway's IPv6 network, the public domain targets port 3000 explicitly, and the healthcheck waits for the worker rather than reporting a false green web page.

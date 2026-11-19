@@ -4,8 +4,8 @@
   "description": "Instagram comment-to-DM automation with Postgres, Redis, and a worker",
   "upstream": {
     "repo": "https://github.com/diwenne/openreply",
-    "commit": "80fa38780e2973a0299c05019bc0d0657044220c",
-    "version": "0.1.0 at 80fa387",
+    "commit": "c78b2d2f68c9764ef7a7dde51dfa5bfa99304a09",
+    "version": "0.1.0 at c78b2d2",
     "licence": "MIT",
     "$note": "Upstream has no release or tag. The exact main-branch commit is pinned so every deploy receives the same source."
   },
@@ -15,17 +15,18 @@
     "$note": "OpenReply uses Meta's official API, deduplicates by comment, and enforces Meta's 750 private replies per hour cap. The template cannot technically disable Match any word, so the listing and deployer guide state this operating rule."
   },
   "image": {
-    "ref": "ghcr.io/hmseeb/openreply-railway:1.0.0",
+    "ref": "ghcr.io/hmseeb/openreply-railway:1.1.0",
     "source": "https://github.com/hmseeb/openreply-railway",
     "$note": "Upstream publishes no application image. This multi-role image builds pinned source with Node 22. The boot script applies Prisma migrations with bounded retries, then starts either the IPv6-bound web process or the long-running worker."
   },
   "topology": {
-    "$note": "Four services. Web receives users, OAuth callbacks, and Meta webhooks. Worker consumes BullMQ jobs and polls for missed comments. Both share Postgres, Redis, and the exact same encryption key. No application service needs filesystem persistence.",
+    "$note": "Five services. Cron runs upstream scripts/cron.sh so refresh-tokens and snapshot-followers actually run when self-hosted. Web receives users, OAuth callbacks, and Meta webhooks. Worker consumes BullMQ jobs and polls for missed comments. Both share Postgres, Redis, and the exact same encryption key. No application service needs filesystem persistence.",
     "publicServices": [
       "web"
     ],
     "privateServices": [
       "worker",
+      "cron",
       "postgres",
       "redis"
     ]
@@ -48,7 +49,7 @@
     },
     {
       "name": "redis",
-      "image": "redis:8.2",
+      "image": "redis:8.10",
       "volume": {
         "mount": "/data"
       },
@@ -61,7 +62,7 @@
     },
     {
       "name": "web",
-      "image": "ghcr.io/hmseeb/openreply-railway:1.0.0",
+      "image": "ghcr.io/hmseeb/openreply-railway:1.1.0",
       "startCommand": "/usr/local/bin/boot.sh web",
       "port": 3000,
       "publicDomain": true,
@@ -83,12 +84,13 @@
         "INSTAGRAM_APP_ID": "<required prompt>",
         "INSTAGRAM_APP_SECRET": "<required prompt>",
         "FACEBOOK_APP_SECRET": "<required prompt>",
-        "WEBHOOK_VERIFY_TOKEN": "${{secret(32)}}"
+        "WEBHOOK_VERIFY_TOKEN": "${{secret(32)}}",
+        "ALLOWED_EMAILS": "optional, empty"
       }
     },
     {
       "name": "worker",
-      "image": "ghcr.io/hmseeb/openreply-railway:1.0.0",
+      "image": "ghcr.io/hmseeb/openreply-railway:1.1.0",
       "startCommand": "/usr/local/bin/boot.sh worker",
       "publicDomain": false,
       "restartPolicy": "ON_FAILURE",
@@ -107,6 +109,18 @@
         "COMMENT_POLL_INTERVAL_MS": "300000",
         "COMMENT_POLL_MAX_PER_SWEEP": "30",
         "COMMENT_POLL_LOOKBACK_HOURS": "72"
+      }
+    },
+    {
+      "name": "cron",
+      "image": "ghcr.io/hmseeb/openreply-railway:1.1.0",
+      "startCommand": "sh /app/scripts/cron.sh",
+      "publicDomain": false,
+      "restartPolicy": "ALWAYS",
+      "$note": "Upstream scheduler loop. Calls /api/cron/attach-next-reel every 5 minutes and refresh-tokens plus snapshot-followers daily at 05 UTC over the private network. Without it Instagram tokens expire silently after 60 days.",
+      "variables": {
+        "CRON_BASE_URL": "http://${{web.RAILWAY_PRIVATE_DOMAIN}}:3000",
+        "CRON_SECRET": "${{web.CRON_SECRET}}"
       }
     }
   ],

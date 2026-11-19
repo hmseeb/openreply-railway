@@ -1,6 +1,6 @@
 # OpenReply on Railway
 
-OpenReply turns an explicit Instagram comment keyword into a private reply through Meta's official API. This repository packages upstream commit [`80fa387`](https://github.com/diwenne/openreply/commit/80fa38780e2973a0299c05019bc0d0657044220c) as a Railway-ready image and four-service template.
+OpenReply turns an explicit Instagram comment keyword into a private reply through Meta's official API. This repository packages upstream commit [`c78b2d2`](https://github.com/diwenne/openreply/commit/c78b2d2f68c9764ef7a7dde51dfa5bfa99304a09) as a Railway-ready image and five-service template.
 
 Upstream: [diwenne/openreply](https://github.com/diwenne/openreply), MIT licensed.
 
@@ -12,6 +12,7 @@ Deploy: https://railway.com/deploy/openreply
 | --- | --- |
 | `web` | Next.js dashboard, authentication, OAuth callback, and Meta webhook on port 3000 |
 | `worker` | Always-on BullMQ consumer and missed-comment poller |
+| `cron` | Runs upstream `scripts/cron.sh`: daily Instagram token refresh and follower snapshot via the private web URL |
 | `postgres` | Users, workspaces, campaigns, encrypted Instagram tokens, and logs |
 | `redis` | Queue jobs, delayed retries, rate limits, and worker heartbeat |
 
@@ -83,4 +84,4 @@ The image is pinned to an exact upstream commit. To upgrade, change `OPENREPLY_C
 
 `test/contract.sh` verifies that the Dockerfile pins upstream source, the boot script applies Prisma migrations, the web role binds IPv6, the worker role exists, and the image builds.
 
-Image: `ghcr.io/hmseeb/openreply-railway:1.0.0`
+Image: `ghcr.io/hmseeb/openreply-railway:1.1.0`
